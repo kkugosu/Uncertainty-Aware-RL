@@ -2,6 +2,24 @@
 
 guided policy search 
 
+as the title, we learn policy guided from ilqr optimization.
+
+we use bnn as dynamic model
+
+overall process of algorithm is like this
+
+1. randomly choose $\pi_{ilqr}$ or $\pi_\theta$ and implement.
+
+2. learn dynamic by bnn
+
+3. learn $\pi_{ilqr} and \pi_\theta$ by using bnn
+
+detail of process 3 is like below, dual gradient descent
+
+first we set cost = f + $\lambda (constraint)$ which is lagrangian form
+
+we name this cost as L($x^{*}(\lambda), \lambda$)
+
 * * * 
 
 repo
