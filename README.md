@@ -1,4 +1,4 @@
-# MB_RL
+## RL_MODELBASED
 
 guided policy search 
 
@@ -30,9 +30,24 @@ $$2. \ \theta \leftarrow argmin_\theta L(\tau, \theta, \lambda) $$
 
 $$3. \ \lambda \leftarrow \lambda  + \alpha * {dg \over d\lambda } $$
 
-* * * 
+* * *
 
-repo
+## Experiment environment
+
+* cartpole
+* hopper
+
+
+## Requirements
+
+* Gym
+* Mujoco
+* Python >= 3.8 
+* Pytorch >= 1.12.0
+* Numpy
+
+
+## repo
 
 ilqr
 
