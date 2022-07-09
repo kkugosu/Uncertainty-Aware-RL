@@ -8,11 +8,11 @@ we use bnn as dynamic model
 
 overall process of algorithm is like this
 
-1. randomly choose $\pi_{ilqr}$ or $\pi_\theta$ and implement.
+$$ 1. randomly choose \pi_{ilqr}$ or $\pi_\theta and implement. $$
 
-2. learn dynamic by bnn
+$$ 2. learn dynamic by bnn $$
 
-3. learn $\pi_{ilqr} and \pi_\theta$ by using bnn
+$$ 3. learn $\pi_{ilqr} and \pi_\theta$ by using bnn $$
 
 detail of process 3 is like below, dual gradient descent
 
