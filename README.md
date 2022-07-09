@@ -28,7 +28,7 @@ $$1. \ \tau \leftarrow argmin_\tau L(\tau, \theta, \lambda) $$
 
 $$2. \ \theta \leftarrow argmin_\theta L(\tau, \theta, \lambda) $$
 
-$$3. \ \lambda \leftarrow \lambda  + \alpha * (dg \over d\lambda ) $$
+$$3. \ \lambda \leftarrow \lambda  + \alpha * {dg \over d\lambda } $$
 
 * * * 
 
