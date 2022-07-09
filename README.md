@@ -25,8 +25,11 @@ $x^{*}(\lambda)$ means trajectory $\tau $ and network parameter $\theta $
 update rule is like this
 
 $$1. \ \tau \leftarrow argmin_\tau L(\tau, \theta, \lambda) $$
+
 $$2. \ \theta \leftarrow argmin_\theta L(\tau, \theta, \lambda) $$
+
 $$3. \ \lambda \leftarrow lambda  + \alpha (dg \over d\lambda ) $$
+
 * * * 
 
 repo
