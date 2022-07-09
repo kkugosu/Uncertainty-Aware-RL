@@ -8,11 +8,11 @@ we use bnn as dynamic model
 
 overall process of algorithm is like this
 
-$$ 1. randomly choose \pi_{ilqr}$ or $\pi_\theta and implement. $$
+$$ 1. \ randomly \ choose \ \pi_{ilqr} \ or \ \pi_\theta \ and \ implement. $$
 
-$$ 2. learn dynamic by bnn $$
+$$ 2. \ learn \ dynamic \ by \ bnn $$
 
-$$ 3. learn $\pi_{ilqr} and \pi_\theta$ by using bnn $$
+$$ 3. \ learn \ \pi_{ilqr} \ and \ \pi_\theta \ by \ using \ bnn $$
 
 detail of process 3 is like below, dual gradient descent
 
@@ -20,6 +20,13 @@ first we set cost = f + $\lambda (constraint)$ which is lagrangian form
 
 we name this cost as L($x^{*}(\lambda), \lambda$)
 
+$x^{*}(\lambda)$ means trajectory $\tau $ and network parameter $\theta $
+
+update rule is like this
+
+$$1. \ \tau \leftarrow argmin_\tau L(\tau, \theta, \lambda) $$
+$$2. \ \theta \leftarrow argmin_\theta L(\tau, \theta, \lambda) $$
+$$3. \ \lambda \leftarrow lambda  + \alpha (dg \over d\lambda ) $$
 * * * 
 
 repo
