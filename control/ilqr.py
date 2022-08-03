@@ -176,3 +176,13 @@ class ilqr:
 
 # for param in rew.parameters():
 #    print(param)
+my_Dyna = Dynamics(STATELEN + ACTLEN, STATELEN, STATELEN)
+my_reward = reward(STATELEN, STATELEN , ACTLEN**2 + ACTLEN + 1)
+TIME_STEP = 6
+BATCH_SIZE = 5
+myilqr = ilqr(TIME_STEP, my_Dyna, my_reward, STATELEN, ACTLEN, BATCH_SIZE)
+action = torch.rand((TIME_STEP, BATCH_SIZE, ACTLEN))
+state = torch.zeros((TIME_STEP, BATCH_SIZE, STATELEN))
+#simulate
+#fit reward, dynamic
+myilqr.fit(action, state)
