@@ -1,10 +1,10 @@
-import random
+import torch
 import numpy as np
 import torch
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+from torch.distributions.multivariate_normal import MultivariateNormal
 
-
-class Converter:
+class IndexAct:
     """
     torch index
     -> numpy action
@@ -76,5 +76,47 @@ class Converter:
             print("converter error")
 
 
+class NAF:
+    def __init__(self, sl, al, re):
+        self.sl = sl
+        self.al = al
+        self.re = re
+
+    def get_batch_reward(self, state, action):
+        pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
+
+        pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al))
+        pre_psd_trans = torch.transpose(pre_psd, 1, 2)
+        psd = torch.matmul(pre_psd, pre_psd_trans)
+
+        a_b = (action - bias).unsqueeze(1)
+        a_b_t = torch.transpose(a_b, 1, 2)
+        return value - torch.matmul(torch.matmul(a_b, psd), a_b_t).squeeze(-1)
+
+    def get_reward(self, state_action):
+        state, action = torch.split(state_action, [self.sl, self.al], dim=-1)
+        pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
+
+        pre_psd = torch.reshape(pre_psd, (self.al, self.al))
+        pre_psd_trans = torch.transpose(pre_psd, 0, 1)
+        psd = torch.matmul(pre_psd, pre_psd_trans)
+
+        a_b = (action - bias).unsqueeze(1)
+        a_b_t = torch.transpose(a_b, 0, 1)
+        return value.squeeze() - torch.matmul(torch.matmul(a_b_t, psd), a_b).squeeze()
+
+
+class NAFGaussian:
+    def __init__(self, sl, al, policy):
+        self.sl = sl
+        self.al = al
+        self.policy = policy
+
+    def prob(self, state):
+        pre_psd, mean = torch.split(self.policy(state), [self.al**2, self.al], dim=-1)
+        pre_psd = torch.reshape(pre_psd, (self.al, self.al))
+        pre_psd_trans = torch.transpose(pre_psd, 0, 1)
+        psd = torch.matmul(pre_psd, pre_psd_trans)
+        return MultivariateNormal(mean, psd)
 
 

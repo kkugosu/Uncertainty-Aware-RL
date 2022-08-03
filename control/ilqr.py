@@ -36,31 +36,7 @@ class ilqr:
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al)
         self.ifconv = 0
 
-    def _get_batch_reward(self, state_action):
 
-        state, action = torch.split(state_action, [self.sl, self.al], dim=-1)
-        pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
-
-        pre_psd = torch.reshape(pre_psd, (self.b_s, self.al, self.al))
-        pre_psd_trans = torch.transpose(pre_psd, 1, 2)
-        psd = torch.matmul(pre_psd, pre_psd_trans)
-
-        a_b = (action - bias).unsqueeze(1)
-        a_b_t = torch.transpose(a_b, 1, 2)
-        return value - torch.matmul(torch.matmul(a_b, psd), a_b_t).squeeze(-1)
-
-    def _get_reward(self, state_action):
-
-        state, action = torch.split(state_action, [self.sl, self.al], dim=-1)
-        pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
-
-        pre_psd = torch.reshape(pre_psd, (self.al, self.al))
-        pre_psd_trans = torch.transpose(pre_psd, 0, 1)
-        psd = torch.matmul(pre_psd, pre_psd_trans)
-
-        a_b = (action - bias).unsqueeze(1)
-        a_b_t = torch.transpose(a_b, 0, 1)
-        return value.squeeze() - torch.matmul(torch.matmul(a_b_t, psd), a_b).squeeze()
 
     def _get_act_prob(self):
 
