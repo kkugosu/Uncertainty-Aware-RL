@@ -9,7 +9,6 @@ from utils import buffer
 import ilqr
 from utils import converter
 import random
-import torch.onnx as onnx
 GAMMA = 0.98
 
 
@@ -21,13 +20,13 @@ class GPS(BASE.BasePolicy):
         self.R_NAF = converter.NAF(self.o_s, self.a_s, self.Reward)
         self.Policy_net = NN.ValueNN(self.o_s, self.h_s, self.a_s**2 + self.a_s).to(self.device)
         self.P_NAF = converter.NAFGaussian(self.o_s, self.a_s, self.Policy_net)
-        
-        self.ilqg = ilqr.ilqr(ts, dyn, re, sl, al, b_s)
-        self.policy = policy.Policy(self.cont, self.Dynamics, self.converter)
+
+        self.iLQG = ilqr.IterativeLQG(ts, dyn, re, sl, al, b_s)
+        self.policy = policy.Policy(self.cont, self.P_NAF, self.converter)
         self.buffer = buffer.Simulate(self.env, self.policy, step_size=self.e_trace, done_penalty=self.d_p)
         self.optimizer_D = torch.optim.SGD(self.Dynamics.parameters(), lr=self.lr)
         self.optimizer_R = torch.optim.SGD(self.Reward.parameters(), lr=self.lr)
-        self.optimizer_P = torch.optim.SGD(self.Policy.parameters(), lr=self.lr)
+        self.optimizer_P = torch.optim.SGD(self.Policy_net.parameters(), lr=self.lr)
         self.criterion = nn.MSELoss(reduction='mean')
 
     def get_policy(self):
@@ -42,7 +41,7 @@ class GPS(BASE.BasePolicy):
             print("loading")
             self.Dynamics.load_state_dict(torch.load(self.PARAM_PATH + "/d.pth"))
             self.Reward.load_state_dict(torch.load(self.PARAM_PATH + "/r.pth"))
-            self.Policy.load_state_dict(torch.load(self.PARAM_PATH + "/p.pth"))
+            self.Policy_net.load_state_dict(torch.load(self.PARAM_PATH + "/p.pth"))
 
             print("loading complete")
         else:
@@ -61,7 +60,7 @@ class GPS(BASE.BasePolicy):
             self.writer.add_scalar("performance", self.buffer.get_performance(), i)
             torch.save(self.Dynamics.state_dict(), self.PARAM_PATH + "/d.pth")
             torch.save(self.Reward.state_dict(), self.PARAM_PATH + "/r.pth")
-            torch.save(self.Policy.state_dict(), self.PARAM_PATH + "/p.pth")
+            torch.save(self.Policy_net.state_dict(), self.PARAM_PATH + "/p.pth")
 
         for param in self.Dynamics.parameters():
             print("----------dyn-------------")
@@ -69,7 +68,7 @@ class GPS(BASE.BasePolicy):
         for param in self.Reward.parameters():
             print("----------rew--------------")
             print(param)
-        for param in self.Policy.parameters():
+        for param in self.Policy_net.parameters():
             print("----------pol--------------")
             print(param)
         self.env.close()
@@ -119,6 +118,12 @@ class GPS(BASE.BasePolicy):
         while i < self.m_i:
             # print(i)
             n_p_o, n_a, n_o, n_r, n_d = next(iter(self.dataloader))
+
+            # update global policy
+            # update local policy all we need is action array and init state
+            # output is local policy and kld
+            # update lambda
+
             t_p_o = torch.tensor(n_p_o, dtype=torch.float32).to(self.device)
             t_a_index = self.converter.act2index(n_a, self.b_s).unsqueeze(axis=-1)
             t_o = torch.tensor(n_o, dtype=torch.float32).to(self.device)

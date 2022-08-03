@@ -8,10 +8,9 @@ ACTLEN = 3
 STEP_SIZE = 4
 
 # based on https://homes.cs.washington.edu/~todorov/papers/TassaIROS12.pdf
-# torch.distributions.multivariate_normal.MultivariateNormal
-# MultivariateNormal(torch.zeros(2), torch.eye(2)) #psd
 
-class ilqr:
+
+class IterativeLQG:
 
     def __init__(self, ts, dyn, re, sl, al, b_s):
         """
@@ -34,11 +33,12 @@ class ilqr:
         self.R = torch.empty((self.ts, self.b_s, 1))
         self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl)
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al)
+        self.kld_loss = nn.KLDivLoss(reduction="mean")
         self.ifconv = 0
 
+    def _cal_total_reward(self, reward, g_policy_distribution, policy_distribution):
 
-
-    def _get_act_prob(self):
+        return reward + self.kld_loss(g_policy_distribution, policy_distribution)
 
     def _forward(self):
 
@@ -61,8 +61,6 @@ class ilqr:
 
             # state shape = [1,state_size]
 
-            self.R[i] = self._get_batch_reward(sa_in)
-
             i = i + 1
         self.S = new_S
         self.A = new_A
@@ -79,11 +77,10 @@ class ilqr:
         i = self.ts - 1
         while i > -1:
 
-            C = vmap(hessian(self._get_reward))(sa_in[i])
+            C = vmap(hessian(self._cal_total_reward))(sa_in[i])
             # shape = [state+action, state+action]
             # print(torch.sum(C[j]))
-            c = vmap(jacfwd(self._get_reward))(sa_in[i])
-
+            c = vmap(jacfwd(self._cal_total_reward))(sa_in[i])
             # shape = [1, state+action]
             # print(torch.sum(c[j]))
             F = vmap(jacfwd(self.dyn))(sa_in[i])
@@ -136,6 +133,7 @@ class ilqr:
             self.K_arr[i] = K
             self.k_arr[i] = k
             i = i - 1
+        return Q_uu
 
     def fit(self, action, state):
         self.A = action
@@ -145,10 +143,11 @@ class ilqr:
         while (self.ifconv != 1) and i < 100:
             i = i + 1
             self._forward()
-            self._backward()
+            Q = self._backward()
 
             print("act", self.A)
-        return self.A
+        return self.A[0], Q
+
 
 # for param in rew.parameters():
 #    print(param)
