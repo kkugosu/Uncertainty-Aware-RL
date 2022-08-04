@@ -44,10 +44,12 @@ class GPS(BASE.BasePolicy):
         i = 0
         while i < self.t_i:
             print(i)
-
             i = i + 1
+            self.Dynamics.set_freeze(1)
             self.buffer.renewal_memory(self.ca, self.data, self.dataloader)
+            self.Dynamics.set_freeze(0)
             dyn_loss, rew_loss = self.train_dynamic_per_buff()
+            self.Dynamics.set_freeze(1)
             policy_loss = self.train_policy_per_buff()
             self.writer.add_scalar("dyn/loss", dyn_loss, i)
             self.writer.add_scalar("rew/loss", rew_loss, i)
@@ -114,8 +116,9 @@ class GPS(BASE.BasePolicy):
             # print(i)
             n_p_o, n_a, n_o, n_r, n_d = next(iter(self.dataloader))
             t_p_o = torch.tensor(n_p_o, dtype=torch.float32).to(self.device)
+            t_a = torch.tensor(n_a, dtype=torch.float32).to(self.device)
             with torch.no_grad():
-                mean, var = self.iLQG.fit(self.R_NAF, self.P_NAF)
+                mean, var = self.iLQG.fit(t_p_o, t_a, self.b_s)
             # update local policy all we need is action(mean) and var
             t_mean, t_var = self.P_NAF.prob(t_p_o)
             mean_d = mean - t_mean

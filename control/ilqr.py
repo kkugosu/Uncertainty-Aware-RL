@@ -38,8 +38,9 @@ class IterativeLQG:
         return m.sample()
 
     def get_local_action(self, state):
-        act = torch.rand((self.ts, self.al))
-        mean, var = self.fit(state, act)
+        state = state.unsqueeze(-2)
+        act = torch.rand((1, self.al))
+        mean, var = self.fit(state, act, 1)
         m = MultivariateNormal(mean, var)
         return m.sample()
 
@@ -57,28 +58,24 @@ class IterativeLQG:
 
     def _forward(self):
 
-        new_S = torch.zeros((self.ts, self.b_s, self.sl))
-        new_A = torch.zeros((self.ts, self.b_s, self.al))
+        new_s = torch.zeros((self.ts, self.b_s, self.sl))
+        new_a = torch.zeros((self.ts, self.b_s, self.al))
         s = self.S[0].clone().detach()
-        # for p in self.dyn.parameters():
-        #    print(p)
+
         i = 0
         while i < self.ts:
-            new_S[i] = s
-            state_difference = (new_S[i] - self.S[i]).unsqueeze(1)
+            new_s[i] = s
+            state_difference = (new_s[i] - self.S[i]).unsqueeze(1)
 
             state_action_trans = torch.matmul(state_difference, torch.transpose((self.K_arr[i]), 1, 2))
 
-            new_A[i] = (state_action_trans + self.k_arr[i]).squeeze(1) + self.A[i]
-            sa_in = torch.cat((new_S[i], new_A[i]), dim=1)
+            new_a[i] = (state_action_trans + self.k_arr[i]).squeeze(1) + self.A[i]
+            sa_in = torch.cat((new_s[i], new_a[i]), dim=1)
 
             s = self.dyn(sa_in)
-
-            # state shape = [1,state_size]
-
             i = i + 1
-        self.S = new_S
-        self.A = new_A
+        self.S = new_s
+        self.A = new_a
 
     def _backward(self):
 
@@ -151,16 +148,18 @@ class IterativeLQG:
         _, cov = torch.split(cov, [self.sl, self.al], dim=-1)
         return cov
 
-    def fit(self, state, action):
-        self.A = action
-        self.S[0] = state[0]
-        setattr(self.dyn, 'freeze', 1)
+    def fit(self, state, action, batch):
+        self.b_s = batch
+        self.S = torch.rand((self.ts, self.b_s, self.sl))
+        self.A = torch.rand((self.ts, self.b_s, self.al))
+        self.A[0] = action
+        self.S[0] = state
+        _C = None
         i = 0
         while (self.if_conv != 1) and i < 100:
             i = i + 1
             self._forward()
-            C = self._backward()
-
-            print("act", self.A)
-        return self.A[0], C
+            _C = self._backward()
+        self._forward()
+        return self.A[0], _C
 
