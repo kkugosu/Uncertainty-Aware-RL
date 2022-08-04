@@ -15,15 +15,16 @@ class Policy:
         t_p_o = torch.tensor(n_p_o, device=device, dtype=torch.float32)
 
         if self.policy == "gps":
-            #half ilqg
-            #half global policy
-            with torch.no_grad():
-                probability = self.model(t_p_o)
-
-            t_a_index = torch.multinomial(probability, 1)
-            n_a = self.converter.index2act(t_a_index.squeeze(-1), 1)
-            return n_a
-
+            if random.random() < 0.5:
+                with torch.no_grad():
+                    t_a = self.model.get_local_action(t_p_o)
+                n_a = t_a.cpu().numpy()
+                return n_a
+            else:
+                with torch.no_grad():
+                    t_a = self.model.get_global_action(t_p_o)
+                n_a = t_a.cpu().numpy()
+                return n_a
         else:
             print("model name error")
             return None

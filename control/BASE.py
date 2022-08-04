@@ -46,6 +46,9 @@ class BasePolicy:
         self.device = DEVICE
         self.d_p = d_p
 
+        if self.cont == "gps":
+            self.e_trace = 1
+
         self.PARAM_PATH = 'Parameter/' + self.env_n + self.cont
         print("parameter path is " + self.PARAM_PATH)
 

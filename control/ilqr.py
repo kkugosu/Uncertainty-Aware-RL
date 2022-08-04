@@ -1,9 +1,6 @@
-import numpy as np
 import torch
 from functorch import vmap, hessian, jacfwd
-STATELEN = 5
-ACTLEN = 3
-STEP_SIZE = 4
+from torch.distributions.multivariate_normal import MultivariateNormal
 # based on https://homes.cs.washington.edu/~todorov/papers/TassaIROS12.pdf
 
 
@@ -12,11 +9,13 @@ class IterativeLQG:
     def __init__(self, dyn, naf_r, naf_p, sl, al, b_s, t_s):
         """
         Args:
-            ts: time step
             dyn: dynamic
-            re: reward
+            naf_r: reward
+            naf_p: reward based policy
             sl: state length
             al: action length
+            b_s: batch size
+            t_s: time step
         """
 
         self.dyn = dyn
@@ -33,15 +32,26 @@ class IterativeLQG:
         self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl)
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al)
 
+    def get_global_action(self, state):
+        mean, var = self.NAF_P.prob(state)
+        m = MultivariateNormal(mean, var)
+        return m.sample()
+
+    def get_local_action(self, state):
+        act = torch.rand((self.ts, self.al))
+        mean, var = self.fit(state, act)
+        m = MultivariateNormal(mean, var)
+        return m.sample()
+
     def total_reward(self, sa_in):
         state, action = torch.split(sa_in, [self.sl, self.al], dim=-1)
         t_mean, t_var = self.NAF_P.prob(state)
         mean, var = self.NAF_R.prob(sa_in)
         mean_d = mean - t_mean
         mean_d_t = torch.transpose(mean_d, -2, -1)
-        kld = torch.log(torch.linalg.det(t_var) - torch.linalg.det(var)) + \
-              torch.trace(torch.matmul(torch.linalg.inv(t_var), var)) + \
-              torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
+        kld = torch.log(torch.linalg.det(t_var) - torch.linalg.det(var))
+        kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
+        kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
         reward = self.NAF_R.sa_reward(sa_in)
         return reward + kld
 
@@ -72,82 +82,81 @@ class IterativeLQG:
 
     def _backward(self):
 
-        C = torch.zeros(self.b_s, self.al + self.sl, self.al + self.sl)
-        F = torch.zeros(self.b_s, self.sl, self.al + self.sl)
-        c = torch.zeros(self.b_s, 1, self.al + self.sl)
-        V = torch.zeros(self.b_s, self.sl, self.sl)
-        v = torch.zeros(self.b_s, 1, self.sl)
+        _C = torch.zeros(self.b_s, self.al + self.sl, self.al + self.sl)
+        _F = torch.zeros(self.b_s, self.sl, self.al + self.sl)
+        _c = torch.zeros(self.b_s, 1, self.al + self.sl)
+        _V = torch.zeros(self.b_s, self.sl, self.sl)
+        _v = torch.zeros(self.b_s, 1, self.sl)
         sa_in = torch.cat((self.S, self.A), dim=-1)
 
         i = self.ts - 1
         while i > -1:
 
-            C = vmap(hessian(self.total_reward))(sa_in[i])
+            _C = vmap(hessian(self.total_reward))(sa_in[i])
             # shape = [state+action, state+action]
             # print(torch.sum(C[j]))
-            c = vmap(jacfwd(self.total_reward))(sa_in[i])
+            _c = vmap(jacfwd(self.total_reward))(sa_in[i])
             # shape = [1, state+action]
             # print(torch.sum(c[j]))
-            F = vmap(jacfwd(self.dyn))(sa_in[i])
+            _F = vmap(jacfwd(self.dyn))(sa_in[i])
             # shape = [state, state+action]
             # print(torch.sum(F[j]))
             # use jacfwd because input is large than output
-            transF = torch.transpose(F, 1, 2)
-            Q = C + torch.matmul(torch.matmul(transF, V), F)
+            _transF = torch.transpose(_F, -2, -1)
+            _Q = _C + torch.matmul(torch.matmul(_transF, _V), _F)
 
             # eq 5[c~e]
-            q = c.unsqueeze(1) + torch.matmul(v, F)
+            _q = _c.unsqueeze(1) + torch.matmul(_v, _F)
 
             # eq 5[a~b]
 
-            Q_pre1, Q_pre2 = torch.split(Q, [self.sl, self.al], dim=1)
-            Q_xx, Q_xu = torch.split(Q_pre1, [self.sl, self.al], dim=2)
-            Q_ux, Q_uu = torch.split(Q_pre2, [self.sl, self.al], dim=2)
+            _Q_pre1, _Q_pre2 = torch.split(_Q, [self.sl, self.al], dim=-2)
+            _Q_xx, _Q_xu = torch.split(_Q_pre1, [self.sl, self.al], dim=-1)
+            _Q_ux, _Q_uu = torch.split(_Q_pre2, [self.sl, self.al], dim=-1)
 
-            Q_x, Q_u = torch.split(q, [self.sl, self.al], dim=-1)
-            ## how to batched eye?
-            # print(Q_uu)
+            _Q_x, _Q_u = torch.split(_q, [self.sl, self.al], dim=-1)
+
             try:
-                invQuu = torch.linalg.inv(Q_uu - torch.eye(self.al) * 0.01)  # - torch.eye(self.al)) #regularize term
+                _invQuu = torch.linalg.inv(_Q_uu - torch.eye(self.al) * 0.01)  # - torch.eye(self.al)) #regularize term
                 # eq [9]
             except:
-                invQuu = torch.linalg.inv(Q_uu + torch.eye(self.al) * 0.01)
-                self.ifconv = 1
+                _invQuu = torch.linalg.inv(_Q_uu + torch.eye(self.al) * 0.01)
+                self.if_conv = 1
 
-            K = -torch.matmul(invQuu, Q_ux)
-            transK = torch.transpose(K, 1, 2)
-            # K_t shape = [actlen, statelen]
+            _K = -torch.matmul(_invQuu, _Q_ux)
+            _transK = torch.transpose(_K, -2, -1)
+            # K shape = [actlen, statelen]
 
-            k = -torch.matmul(Q_u, invQuu)
+            _k = -torch.matmul(_Q_u, _invQuu)
             # k_t shape = [1,actlen]
 
-            V = (Q_xx + torch.matmul(Q_xu, K) +
-                 torch.matmul(transK, Q_ux) +
-                 torch.matmul(torch.matmul(transK, Q_uu), K)
-                 )
+            _V = (_Q_xx + torch.matmul(_Q_xu, _K) +
+                  torch.matmul(_transK, _Q_ux) +
+                  torch.matmul(torch.matmul(_transK, _Q_uu), _K)
+                  )
             # eq 11c
             # V_t shape = [statelen, statelen]
 
-            v = (Q_x + torch.matmul(k, Q_ux) +
-                 torch.matmul(Q_u, K) +
-                 torch.matmul(k, torch.matmul(Q_uu, K))
-                 )
+            _v = (_Q_x + torch.matmul(_k, _Q_ux) +
+                  torch.matmul(_Q_u, _K) +
+                  torch.matmul(_k, torch.matmul(_Q_uu, _K))
+                  )
             # eq 11b
             # v_t shape = [1, statelen]
 
-            self.K_arr[i] = K
-            self.k_arr[i] = k
+            self.K_arr[i] = _K
+            self.k_arr[i] = _k
             i = i - 1
-        _, cov = torch.split(C, [self.sl, self.al], dim=1)
-        _, cov = torch.split(cov, [self.sl, self.al], dim=2)
+        _, cov = torch.split(_C, [self.sl, self.al], dim=-2)
+        _, cov = torch.split(cov, [self.sl, self.al], dim=-1)
         return cov
 
-    def fit(self, action, state):
+    def fit(self, state, action):
         self.A = action
         self.S[0] = state[0]
         setattr(self.dyn, 'freeze', 1)
         i = 0
-        while (self.ifconv != 1) and i < 100:
+        while (self.if_conv != 1) and i < 100:
             i = i + 1
             self._forward()
             C = self._backward()

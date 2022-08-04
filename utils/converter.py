@@ -1,8 +1,7 @@
-import torch
 import numpy as np
 import torch
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-from torch.distributions.multivariate_normal import MultivariateNormal
+
 
 class IndexAct:
     """

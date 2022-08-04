@@ -1,5 +1,4 @@
 import torch
-import random
 import numpy as np
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 GAMMA = 0.98

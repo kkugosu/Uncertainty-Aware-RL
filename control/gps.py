@@ -1,14 +1,13 @@
 from control import BASE, policy
-import gym
 import torch
 import numpy as np
-import sys
 from torch import nn
 from NeuralNetwork import NN, bayesian_nn
 from utils import buffer
 import ilqr
 from utils import converter
 GAMMA = 0.98
+i_lqr_step = 10
 
 
 class GPS(BASE.BasePolicy):
@@ -20,8 +19,8 @@ class GPS(BASE.BasePolicy):
         self.Policy_net = NN.ValueNN(self.o_s, self.h_s, self.a_s**2 + self.a_s).to(self.device)
         self.P_NAF = converter.NAFPolicy(self.o_s, self.a_s, self.Policy_net)
 
-        self.iLQG = ilqr.IterativeLQG(self.Dynamics, self.R_NAF, self.P_NAF, self.o_s, self.a_s, self.b_s, self.e_trace)
-        self.policy = policy.Policy(self.cont, self.P_NAF, self.converter)
+        self.iLQG = ilqr.IterativeLQG(self.Dynamics, self.R_NAF, self.P_NAF, self.o_s, self.a_s, self.b_s, i_lqr_step)
+        self.policy = policy.Policy(self.cont, self.iLQG, self.converter)
         self.buffer = buffer.Simulate(self.env, self.policy, step_size=self.e_trace, done_penalty=self.d_p)
         self.optimizer_D = torch.optim.SGD(self.Dynamics.parameters(), lr=self.lr)
         self.optimizer_R = torch.optim.SGD(self.Reward.parameters(), lr=self.lr)
@@ -109,10 +108,8 @@ class GPS(BASE.BasePolicy):
 
     def train_policy_per_buff(self):
         i = 0
-        timestep = 5
         lamb = 1
         kld = 0
-        self.iLQG.set_initialize(self.b_s, timestep)
         while i < self.m_i:
             # print(i)
             n_p_o, n_a, n_o, n_r, n_d = next(iter(self.dataloader))
@@ -123,9 +120,9 @@ class GPS(BASE.BasePolicy):
             t_mean, t_var = self.P_NAF.prob(t_p_o)
             mean_d = mean - t_mean
             mean_d_t = torch.transpose(mean_d, -2, -1)
-            kld = torch.log(torch.linalg.det(t_var) - torch.linalg.det(var)) +\
-                  torch.trace(torch.matmul(torch.linalg.inv(t_var), var)) + \
-                  torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
+            kld = kld + torch.log(torch.linalg.det(t_var) - torch.linalg.det(var))
+            kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
+            kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
             # kl - divergence - between - two - multivariate - gaussians
             self.optimizer_P.zero_grad()
             kld.backward(retain_graph=True)
