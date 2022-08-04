@@ -12,7 +12,7 @@ STEP_SIZE = 4
 
 class IterativeLQG:
 
-    def __init__(self, ts, dyn, re, sl, al, b_s):
+    def __init__(self, dyn, re, pol, sl, al):
         """
         Args:
             ts: time step
@@ -21,23 +21,38 @@ class IterativeLQG:
             sl: state length
             al: action length
         """
-        self.ts = ts
+
         self.dyn = dyn
         self.re = re
+        self.pol = pol
         self.sl = sl
         self.al = al
-        self.b_s = b_s
+        self.b_s = None
+        self.ts = None
+        self.S = None
+        self.A = None
+        self.R = None
+        self.K_arr = None
+        self.k_arr = None
+        self.kld_loss = nn.KLDivLoss(reduction="mean")
+        self.if_conv = 0
 
+    def set_initialize(self, b_s, ts):
+        self.b_s = b_s
+        self.ts = ts
         self.S = torch.zeros((self.ts, self.b_s, self.sl))
         self.A = torch.zeros((self.ts, self.b_s, self.al))
         self.R = torch.empty((self.ts, self.b_s, 1))
         self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl)
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al)
-        self.kld_loss = nn.KLDivLoss(reduction="mean")
-        self.ifconv = 0
 
     def _cal_total_reward(self, reward, g_policy_distribution, policy_distribution):
-
+        t_mean, t_var = self.P_NAF.prob(t_p_o)
+        mean_d = mean - t_mean
+        mean_d_t = torch.transpose(mean_d, -2, -1)
+        kld = torch.log(torch.linalg.det(t_var) - torch.linalg.det(var)) + \
+              torch.trace(torch.matmul(torch.linalg.inv(t_var), var)) + \
+              torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
         return reward + self.kld_loss(g_policy_distribution, policy_distribution)
 
     def _forward(self):
@@ -133,7 +148,9 @@ class IterativeLQG:
             self.K_arr[i] = K
             self.k_arr[i] = k
             i = i - 1
-        return Q_uu
+        _, cov = torch.split(C, [self.sl, self.al], dim=1)
+        _, cov = torch.split(cov, [self.sl, self.al], dim=2)
+        return cov
 
     def fit(self, action, state):
         self.A = action
@@ -143,21 +160,8 @@ class IterativeLQG:
         while (self.ifconv != 1) and i < 100:
             i = i + 1
             self._forward()
-            Q = self._backward()
+            C = self._backward()
 
             print("act", self.A)
-        return self.A[0], Q
+        return self.A[0], C
 
-
-# for param in rew.parameters():
-#    print(param)
-my_Dyna = Dynamics(STATELEN + ACTLEN, STATELEN, STATELEN)
-my_reward = reward(STATELEN, STATELEN , ACTLEN**2 + ACTLEN + 1)
-TIME_STEP = 6
-BATCH_SIZE = 5
-myilqr = ilqr(TIME_STEP, my_Dyna, my_reward, STATELEN, ACTLEN, BATCH_SIZE)
-action = torch.rand((TIME_STEP, BATCH_SIZE, ACTLEN))
-state = torch.zeros((TIME_STEP, BATCH_SIZE, STATELEN))
-#simulate
-#fit reward, dynamic
-myilqr.fit(action, state)

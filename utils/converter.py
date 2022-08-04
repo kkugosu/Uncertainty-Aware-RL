@@ -76,37 +76,38 @@ class IndexAct:
             print("converter error")
 
 
-class NAF:
+class NAFReward:
     def __init__(self, sl, al, re):
         self.sl = sl
         self.al = al
         self.re = re
 
-    def get_batch_reward(self, state, action):
-        pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
-
-        pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al))
-        pre_psd_trans = torch.transpose(pre_psd, 1, 2)
-        psd = torch.matmul(pre_psd, pre_psd_trans)
-
-        a_b = (action - bias).unsqueeze(1)
-        a_b_t = torch.transpose(a_b, 1, 2)
-        return value - torch.matmul(torch.matmul(a_b, psd), a_b_t).squeeze(-1)
-
-    def get_reward(self, state_action):
+    def sa_reward(self, state_action):
         state, action = torch.split(state_action, [self.sl, self.al], dim=-1)
         pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
 
-        pre_psd = torch.reshape(pre_psd, (self.al, self.al))
-        pre_psd_trans = torch.transpose(pre_psd, 0, 1)
+        pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al)).squeeze()
+        pre_psd_trans = torch.transpose(pre_psd, -2, -1)
         psd = torch.matmul(pre_psd, pre_psd_trans)
 
-        a_b = (action - bias).unsqueeze(1)
-        a_b_t = torch.transpose(a_b, 0, 1)
-        return value.squeeze() - torch.matmul(torch.matmul(a_b_t, psd), a_b).squeeze()
+        a_b = (action - bias).unsqueeze(-2)
+        a_b_t = torch.transpose(a_b, -2, -1)
+        last_val = value - torch.matmul(torch.matmul(a_b, psd), a_b_t)
+
+        return last_val.squeeze()
+
+    def sa_prob(self, state_action):
+        state, action = torch.split(state_action, [self.sl, self.al], dim=-1)
+        pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
+
+        pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al)).squeeze()
+        pre_psd_trans = torch.transpose(pre_psd, -2, -1)
+        psd = torch.matmul(pre_psd, pre_psd_trans)
+
+        return bias, psd
 
 
-class NAFGaussian:
+class NAFPolicy:
     def __init__(self, sl, al, policy):
         self.sl = sl
         self.al = al
@@ -117,6 +118,8 @@ class NAFGaussian:
         pre_psd = torch.reshape(pre_psd, (self.al, self.al))
         pre_psd_trans = torch.transpose(pre_psd, 0, 1)
         psd = torch.matmul(pre_psd, pre_psd_trans)
-        return MultivariateNormal(mean, psd)
+        # psd = cov matrix
+        # MultivariateNormal(mean, psd)
+        return mean, psd
 
 
