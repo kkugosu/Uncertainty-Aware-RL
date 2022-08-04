@@ -96,7 +96,7 @@ class NAFReward:
 
         return last_val.squeeze()
 
-    def sa_prob(self, state_action):
+    def prob(self, state_action):
         state, action = torch.split(state_action, [self.sl, self.al], dim=-1)
         pre_psd, bias, value = torch.split(self.re(state), [self.al ** 2, self.al, 1], dim=-1)
 

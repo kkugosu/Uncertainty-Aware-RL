@@ -3,6 +3,7 @@ import torch
 from torch import nn
 import torch.autograd.functional as Fu
 from functorch import vmap, hessian, jacfwd
+from utils import converter
 STATELEN = 5
 ACTLEN = 3
 STEP_SIZE = 4
@@ -36,6 +37,8 @@ class IterativeLQG:
         self.k_arr = None
         self.kld_loss = nn.KLDivLoss(reduction="mean")
         self.if_conv = 0
+        self.NAF_R = converter.NAFReward(self.sl, self.al, self.re)
+        self.NAF_P = converter.NAFPolicy(self.sl, self.al, self.pol)
 
     def set_initialize(self, b_s, ts):
         self.b_s = b_s
@@ -46,14 +49,17 @@ class IterativeLQG:
         self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl)
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al)
 
-    def _cal_total_reward(self, reward, g_policy_distribution, policy_distribution):
-        t_mean, t_var = self.P_NAF.prob(t_p_o)
+    def total_reward(self, sa_in):
+        state, action = torch.split(sa_in, [self.sl, self.al], dim=-1)
+        t_mean, t_var = self.NAF_P.prob(state)
+        mean, var = self.NAF_R.prob(sa_in)
         mean_d = mean - t_mean
         mean_d_t = torch.transpose(mean_d, -2, -1)
         kld = torch.log(torch.linalg.det(t_var) - torch.linalg.det(var)) + \
               torch.trace(torch.matmul(torch.linalg.inv(t_var), var)) + \
               torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
-        return reward + self.kld_loss(g_policy_distribution, policy_distribution)
+        reward = self.NAF_R.sa_reward(sa_in)
+        return reward + kld
 
     def _forward(self):
 
@@ -92,10 +98,10 @@ class IterativeLQG:
         i = self.ts - 1
         while i > -1:
 
-            C = vmap(hessian(self._cal_total_reward))(sa_in[i])
+            C = vmap(hessian(self.total_reward))(sa_in[i])
             # shape = [state+action, state+action]
             # print(torch.sum(C[j]))
-            c = vmap(jacfwd(self._cal_total_reward))(sa_in[i])
+            c = vmap(jacfwd(self.total_reward))(sa_in[i])
             # shape = [1, state+action]
             # print(torch.sum(c[j]))
             F = vmap(jacfwd(self.dyn))(sa_in[i])
