@@ -1,19 +1,15 @@
 import numpy as np
 import torch
-from torch import nn
-import torch.autograd.functional as Fu
 from functorch import vmap, hessian, jacfwd
-from utils import converter
 STATELEN = 5
 ACTLEN = 3
 STEP_SIZE = 4
-
 # based on https://homes.cs.washington.edu/~todorov/papers/TassaIROS12.pdf
 
 
 class IterativeLQG:
 
-    def __init__(self, dyn, re, pol, sl, al):
+    def __init__(self, dyn, naf_r, naf_p, sl, al, b_s, t_s):
         """
         Args:
             ts: time step
@@ -24,25 +20,13 @@ class IterativeLQG:
         """
 
         self.dyn = dyn
-        self.re = re
-        self.pol = pol
         self.sl = sl
         self.al = al
-        self.b_s = None
-        self.ts = None
-        self.S = None
-        self.A = None
-        self.R = None
-        self.K_arr = None
-        self.k_arr = None
-        self.kld_loss = nn.KLDivLoss(reduction="mean")
         self.if_conv = 0
-        self.NAF_R = converter.NAFReward(self.sl, self.al, self.re)
-        self.NAF_P = converter.NAFPolicy(self.sl, self.al, self.pol)
-
-    def set_initialize(self, b_s, ts):
+        self.NAF_R = naf_r
+        self.NAF_P = naf_p
         self.b_s = b_s
-        self.ts = ts
+        self.ts = t_s
         self.S = torch.zeros((self.ts, self.b_s, self.sl))
         self.A = torch.zeros((self.ts, self.b_s, self.al))
         self.R = torch.empty((self.ts, self.b_s, 1))

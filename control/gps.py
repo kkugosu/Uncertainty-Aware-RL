@@ -20,7 +20,7 @@ class GPS(BASE.BasePolicy):
         self.Policy_net = NN.ValueNN(self.o_s, self.h_s, self.a_s**2 + self.a_s).to(self.device)
         self.P_NAF = converter.NAFPolicy(self.o_s, self.a_s, self.Policy_net)
 
-        self.iLQG = ilqr.IterativeLQG(self.Dynamics, self.R_NAF, self.P_NAF, self.o_s, self.a_s)
+        self.iLQG = ilqr.IterativeLQG(self.Dynamics, self.R_NAF, self.P_NAF, self.o_s, self.a_s, self.b_s, self.e_trace)
         self.policy = policy.Policy(self.cont, self.P_NAF, self.converter)
         self.buffer = buffer.Simulate(self.env, self.policy, step_size=self.e_trace, done_penalty=self.d_p)
         self.optimizer_D = torch.optim.SGD(self.Dynamics.parameters(), lr=self.lr)
@@ -30,9 +30,6 @@ class GPS(BASE.BasePolicy):
 
     def get_policy(self):
         return self.policy
-
-    def reward_naf(self):
-        self.Reward = NN.ValueNN(self.o_s, self.h_s, self.a_index_s).to(self.device)
 
     def training(self, load=int(0)):
 
