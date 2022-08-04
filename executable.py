@@ -1,4 +1,4 @@
-from control import DQN, PG, AC, DDPG, SAC, TRPO, PPO
+from control import gps
 from utils import render
 
 if __name__ == "__main__":
@@ -54,27 +54,45 @@ if __name__ == "__main__":
             precision = get_integer()
         else:
             print("error")
+    model_type = None
 
     valid = 0
     while valid == 0:
-        print("enter RL control, {PG, DQN, AC, TRPO, PPO, DDPG, SAC}")
-        control = input("->")
-        if control == "PG":
+        print("model_free : 0, model_based : 1, meta : 2")
+        model_type = get_integer()
+        if (model_type >= 0) | (model_type < 3):
             valid = 1
-        elif control == "DQN":
-            valid = 1
-        elif control == "AC":
-            valid = 1
-        elif control == "TRPO":
-            valid = 1
-        elif control == "PPO":
-            valid = 1
-        elif control == "DDPG":
-            valid = 1
-        elif control == "SAC":
-            valid = 1
-        else:
-            print("error")
+
+    if model_type == 0:
+        valid = 0
+        while valid == 0:
+            print("enter RL control, {PG, DQN, AC, TRPO, PPO, DDPG, SAC}")
+            control = input("->")
+            if control == "PG":
+                valid = 1
+            elif control == "DQN":
+                valid = 1
+            elif control == "AC":
+                valid = 1
+            elif control == "TRPO":
+                valid = 1
+            elif control == "PPO":
+                valid = 1
+            elif control == "DDPG":
+                valid = 1
+            elif control == "SAC":
+                valid = 1
+            else:
+                print("error")
+    else:
+        valid = 0
+        while valid == 0:
+            print("enter RL control, {gps}")
+            control = input("->")
+            if control == "gps":
+                valid = 1
+            else:
+                print("error")
 
     print("enter HIDDEN_SIZE recommend 32")
     HIDDEN_SIZE = get_integer()
@@ -94,7 +112,7 @@ if __name__ == "__main__":
     print("enter learning rate recommend 0.01")
     learning_rate = get_float()
 
-    print("enter eligibility trace step, if pg: 100")
+    print("enter eligibility trace step, if pg: 100, if gps: 1")
     e_trace = get_integer()
 
     print("done penalty, if cartpole, recommend 10")
@@ -110,7 +128,8 @@ if __name__ == "__main__":
                 TRAIN_ITER, MEMORY_ITER, control, env_name, e_trace, precision, done_penalty]
     print(arg_list)
 
-    if control == "PG":
+    """
+        if control == "PG":
         mechanism = PG.PGPolicy(*arg_list)
         mechanism.training(load=load_)
         policy = mechanism.get_policy()
@@ -145,6 +164,11 @@ if __name__ == "__main__":
 
     elif control == "SAC":
         mechanism = SAC.SACPolicy(*arg_list)
+        mechanism.training(load=load_)
+        policy = mechanism.get_policy()
+    """
+    if control == "gps":
+        mechanism = gps.GPS(*arg_list)
         mechanism.training(load=load_)
         policy = mechanism.get_policy()
 

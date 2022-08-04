@@ -121,9 +121,9 @@ class GPS(BASE.BasePolicy):
                 mean, var = self.iLQG.fit(t_p_o, t_a, self.b_s)
             # update local policy all we need is action(mean) and var
             t_mean, t_var = self.P_NAF.prob(t_p_o)
-            mean_d = mean - t_mean
+            mean_d = (mean - t_mean).unsqueeze(-2)
             mean_d_t = torch.transpose(mean_d, -2, -1)
-            kld = kld + torch.log(torch.linalg.det(t_var) - torch.linalg.det(var))
+            kld = kld + torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var))
             kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
             kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
             # kl - divergence - between - two - multivariate - gaussians

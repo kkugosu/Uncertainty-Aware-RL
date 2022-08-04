@@ -48,11 +48,12 @@ class IterativeLQG:
         state, action = torch.split(sa_in, [self.sl, self.al], dim=-1)
         t_mean, t_var = self.NAF_P.prob(state)
         mean, var = self.NAF_R.prob(sa_in)
-        mean_d = mean - t_mean
+        mean_d = (mean - t_mean).unsqueeze(0)
         mean_d_t = torch.transpose(mean_d, -2, -1)
-        kld = torch.log(torch.linalg.det(t_var) - torch.linalg.det(var))
+        kld = torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var))
         kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
         kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
+        kld = kld.squeeze()
         reward = self.NAF_R.sa_reward(sa_in)
         return reward + kld
 

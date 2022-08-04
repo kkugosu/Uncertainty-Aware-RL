@@ -114,8 +114,8 @@ class NAFPolicy:
 
     def prob(self, state):
         pre_psd, mean = torch.split(self.policy(state), [self.al**2, self.al], dim=-1)
-        pre_psd = torch.reshape(pre_psd, (self.al, self.al))
-        pre_psd_trans = torch.transpose(pre_psd, 0, 1)
+        pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al)).squeeze()
+        pre_psd_trans = torch.transpose(pre_psd, -2, -1)
         psd = torch.matmul(pre_psd, pre_psd_trans)
         # psd = cov matrix
         # MultivariateNormal(mean, psd)
