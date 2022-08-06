@@ -1,10 +1,10 @@
-from control import BASE, policy
+from control import BASE, policy, ilqr
 import torch
 import numpy as np
 from torch import nn
 from NeuralNetwork import NN, bayesian_nn
 from utils import buffer
-import ilqr
+
 from utils import converter
 GAMMA = 0.98
 i_lqr_step = 10
@@ -18,8 +18,8 @@ class GPS(BASE.BasePolicy):
         self.R_NAF = converter.NAFReward(self.o_s, self.a_s, self.Reward)
         self.Policy_net = NN.ValueNN(self.o_s, self.h_s, self.a_s**2 + self.a_s).to(self.device)
         self.P_NAF = converter.NAFPolicy(self.o_s, self.a_s, self.Policy_net)
-
-        self.iLQG = ilqr.IterativeLQG(self.Dynamics, self.R_NAF, self.P_NAF, self.o_s, self.a_s, self.b_s, i_lqr_step)
+        self.iLQG = ilqr.IterativeLQG(self.Dynamics, self.R_NAF, self.P_NAF, self.o_s, self.a_s,
+                                      self.b_s, i_lqr_step, self.device)
         self.policy = policy.Policy(self.cont, self.iLQG, self.converter)
         self.buffer = buffer.Simulate(self.env, self.policy, step_size=self.e_trace, done_penalty=self.d_p)
         self.optimizer_D = torch.optim.SGD(self.Dynamics.parameters(), lr=self.lr)
@@ -47,8 +47,10 @@ class GPS(BASE.BasePolicy):
             i = i + 1
             self.Dynamics.set_freeze(1)
             self.buffer.renewal_memory(self.ca, self.data, self.dataloader)
+            print("full memory")
             self.Dynamics.set_freeze(0)
             dyn_loss, rew_loss = self.train_dynamic_per_buff()
+            print("dynamic trained")
             self.Dynamics.set_freeze(1)
             policy_loss = self.train_policy_per_buff()
             self.writer.add_scalar("dyn/loss", dyn_loss, i)

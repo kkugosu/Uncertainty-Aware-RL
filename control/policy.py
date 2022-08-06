@@ -17,12 +17,14 @@ class Policy:
         if self.policy == "gps":
             if random.random() < 0.5:
                 with torch.no_grad():
-                    t_a = self.model.get_local_action(t_p_o)
+                    t_a = self.model.get_global_action(t_p_o)
                 n_a = t_a.cpu().numpy()
                 return n_a
             else:
+                print("local")
                 with torch.no_grad():
-                    t_a = self.model.get_global_action(t_p_o)
+                    t_a = self.model.get_local_action(t_p_o)
+                print("local selected")
                 n_a = t_a.cpu().numpy()
                 return n_a
         else:

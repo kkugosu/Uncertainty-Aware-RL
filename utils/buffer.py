@@ -23,6 +23,7 @@ class Simulate:
             t = 0
             while t < capacity - total_num: #if pg, gain accumulate
                 n_a = self.policy.select_action(n_p_o)
+                print("action selected")
                 n_o, n_r, n_d, n_i = self.env.step(n_a)
                 dataset.push(n_p_o, n_a, n_o, n_r, np.float32(n_d))
                 n_p_o = n_o

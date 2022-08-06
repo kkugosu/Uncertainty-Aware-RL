@@ -1,12 +1,13 @@
 import torch
 from functorch import vmap, hessian, jacfwd
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.autograd.functional import hessian, jacobian
 # based on https://homes.cs.washington.edu/~todorov/papers/TassaIROS12.pdf
 
 
 class IterativeLQG:
 
-    def __init__(self, dyn, naf_r, naf_p, sl, al, b_s, t_s):
+    def __init__(self, dyn, naf_r, naf_p, sl, al, b_s, t_s, device):
         """
         Args:
             dyn: dynamic
@@ -26,11 +27,12 @@ class IterativeLQG:
         self.NAF_P = naf_p
         self.b_s = b_s
         self.ts = t_s
-        self.S = torch.zeros((self.ts, self.b_s, self.sl))
-        self.A = torch.zeros((self.ts, self.b_s, self.al))
-        self.R = torch.empty((self.ts, self.b_s, 1))
-        self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl)
-        self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al)
+        self.device = device
+        self.S = torch.zeros((self.ts, self.b_s, self.sl)).to(self.device)
+        self.A = torch.zeros((self.ts, self.b_s, self.al)).to(self.device)
+        self.R = torch.empty((self.ts, self.b_s, 1)).to(self.device)
+        self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl).to(self.device)
+        self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al).to(self.device)
 
     def get_global_action(self, state):
         mean, var = self.NAF_P.prob(state)
@@ -39,28 +41,38 @@ class IterativeLQG:
 
     def get_local_action(self, state):
         state = state.unsqueeze(-2)
-        act = torch.rand((1, self.al))
+        print("local state", state)
+        act = torch.rand((1, self.al)).to(self.device)
+        print(act)
         mean, var = self.fit(state, act, 1)
+        mean = mean.squeeze(-2)
         m = MultivariateNormal(mean, var)
         return m.sample()
 
-    def total_reward(self, sa_in):
+    def total_cost(self, sa_in):
         state, action = torch.split(sa_in, [self.sl, self.al], dim=-1)
+
         t_mean, t_var = self.NAF_P.prob(state)
         mean, var = self.NAF_R.prob(sa_in)
+
+        #sampling no problem
         mean_d = (mean - t_mean).unsqueeze(0)
         mean_d_t = torch.transpose(mean_d, -2, -1)
         kld = torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var))
         kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
         kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
         kld = kld.squeeze()
+
+        #print("kld = ", kld)
+
         reward = self.NAF_R.sa_reward(sa_in)
+        #print("reward = ", reward)
         return reward + kld
 
     def _forward(self):
 
-        new_s = torch.zeros((self.ts, self.b_s, self.sl))
-        new_a = torch.zeros((self.ts, self.b_s, self.al))
+        new_s = torch.zeros((self.ts, self.b_s, self.sl)).to(self.device)
+        new_a = torch.zeros((self.ts, self.b_s, self.al)).to(self.device)
         s = self.S[0].clone().detach()
 
         i = 0
@@ -72,7 +84,6 @@ class IterativeLQG:
 
             new_a[i] = (state_action_trans + self.k_arr[i]).squeeze(1) + self.A[i]
             sa_in = torch.cat((new_s[i], new_a[i]), dim=1)
-
             s = self.dyn(sa_in)
             i = i + 1
         self.S = new_s
@@ -80,26 +91,29 @@ class IterativeLQG:
 
     def _backward(self):
 
-        _C = torch.zeros(self.b_s, self.al + self.sl, self.al + self.sl)
-        _F = torch.zeros(self.b_s, self.sl, self.al + self.sl)
-        _c = torch.zeros(self.b_s, 1, self.al + self.sl)
-        _V = torch.zeros(self.b_s, self.sl, self.sl)
-        _v = torch.zeros(self.b_s, 1, self.sl)
+        _C = torch.zeros(self.b_s, self.al + self.sl, self.al + self.sl).to(self.device)
+        _F = torch.zeros(self.b_s, self.sl, self.al + self.sl).to(self.device)
+        _c = torch.zeros(self.b_s, 1, self.al + self.sl).to(self.device)
+        _V = torch.zeros(self.b_s, self.sl, self.sl).to(self.device)
+        _v = torch.zeros(self.b_s, 1, self.sl).to(self.device)
         sa_in = torch.cat((self.S, self.A), dim=-1)
 
         i = self.ts - 1
         while i > -1:
-
-            _C = vmap(hessian(self.total_reward))(sa_in[i])
-            # shape = [state+action, state+action]
-            # print(torch.sum(C[j]))
-            _c = vmap(jacfwd(self.total_reward))(sa_in[i])
-            # shape = [1, state+action]
-            # print(torch.sum(c[j]))
-            _F = vmap(jacfwd(self.dyn))(sa_in[i])
-            # shape = [state, state+action]
-            # print(torch.sum(F[j]))
-            # use jacfwd because input is large than output
+            j = 0
+            errcount = 0
+            while j < self.b_s:
+                _C[j] = hessian(self.total_cost, sa_in[i][j])
+                #try:
+                #    torch.linalg.cholesky(_C[j])
+                #except:
+                #    errcount = errcount + 1
+                #    print("hessian error")
+                #    _C[j] = _C[j] + torch.eye(self.al + self.sl, device=self.device)*0.001
+                _c[j] = jacobian(self.total_cost, sa_in[i][j])
+                _F[j] = jacobian(self.dyn, sa_in[i][j])
+                j = j + 1
+            #print("errcount", errcount)
             _transF = torch.transpose(_F, -2, -1)
             _Q = _C + torch.matmul(torch.matmul(_transF, _V), _F)
 
@@ -115,10 +129,11 @@ class IterativeLQG:
             _Q_x, _Q_u = torch.split(_q, [self.sl, self.al], dim=-1)
 
             try:
-                _invQuu = torch.linalg.inv(_Q_uu - torch.eye(self.al) * 0.01)  # - torch.eye(self.al)) #regularize term
+                _invQuu = torch.linalg.inv(_Q_uu - torch.eye(self.al).to(self.device) * 0.01)
+                # - torch.eye(self.al)) #regularize term
                 # eq [9]
             except:
-                _invQuu = torch.linalg.inv(_Q_uu + torch.eye(self.al) * 0.01)
+                _invQuu = torch.linalg.inv(_Q_uu + torch.eye(self.al).to(self.device) * 0.01)
                 self.if_conv = 1
 
             _K = -torch.matmul(_invQuu, _Q_ux)
@@ -147,20 +162,27 @@ class IterativeLQG:
             i = i - 1
         _, cov = torch.split(_C, [self.sl, self.al], dim=-2)
         _, cov = torch.split(cov, [self.sl, self.al], dim=-1)
-        return cov
+        return cov.squeeze()
 
     def fit(self, state, action, batch):
         self.b_s = batch
-        self.S = torch.rand((self.ts, self.b_s, self.sl))
-        self.A = torch.rand((self.ts, self.b_s, self.al))
+        self.R = torch.empty((self.ts, self.b_s, 1)).to(self.device)
+        self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl).to(self.device)
+        self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al).to(self.device)
+        self.S = torch.rand((self.ts, self.b_s, self.sl)).to(self.device)
+        self.A = torch.rand((self.ts, self.b_s, self.al)).to(self.device)
         self.A[0] = action
         self.S[0] = state
         _C = None
         i = 0
-        while (self.if_conv != 1) and i < 100:
+        while (self.if_conv != 1) and i < 10:
             i = i + 1
             self._forward()
             _C = self._backward()
         self._forward()
+        print(self.A[0])
+        print("Ashape", self.A[0].size())
+        print(_C)
+        print("Cshape", _C.size())
         return self.A[0], _C
 

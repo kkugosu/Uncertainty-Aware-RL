@@ -91,7 +91,7 @@ class NAFReward:
 
         a_b = (action - bias).unsqueeze(-2)
         a_b_t = torch.transpose(a_b, -2, -1)
-        last_val = value - torch.matmul(torch.matmul(a_b, psd), a_b_t)
+        last_val = torch.matmul(torch.matmul(a_b, psd), a_b_t) - value
 
         return last_val.squeeze()
 
@@ -102,7 +102,7 @@ class NAFReward:
         pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al)).squeeze()
         pre_psd_trans = torch.transpose(pre_psd, -2, -1)
         psd = torch.matmul(pre_psd, pre_psd_trans)
-
+        # psd = psd no exception occered
         return bias, psd
 
 
@@ -119,6 +119,7 @@ class NAFPolicy:
         psd = torch.matmul(pre_psd, pre_psd_trans)
         # psd = cov matrix
         # MultivariateNormal(mean, psd)
+        # psd = psd no exception occered
         return mean, psd
 
 
