@@ -166,6 +166,7 @@ class IterativeLQG:
             i = i + 1
             self._forward()
             _C = self._backward()
+            print(self.A[0])
         self._forward()
 
         return self.A[0], _C

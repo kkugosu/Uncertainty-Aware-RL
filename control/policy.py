@@ -15,7 +15,7 @@ class Policy:
         t_p_o = torch.tensor(n_p_o, device=device, dtype=torch.float32)
 
         if self.policy == "gps":
-            if random.random() < 0.5:
+            if random.random() < 1.1:
                 with torch.no_grad():
                     t_a = self.model.get_global_action(t_p_o)
                 n_a = t_a.cpu().numpy()

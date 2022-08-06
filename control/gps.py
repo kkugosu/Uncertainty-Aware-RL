@@ -7,7 +7,7 @@ from utils import buffer
 
 from utils import converter
 GAMMA = 0.98
-i_lqr_step = 5
+i_lqr_step = 3
 
 
 class GPS(BASE.BasePolicy):
@@ -137,6 +137,11 @@ class GPS(BASE.BasePolicy):
             kld = kld + pre_trace.diagonal(offset=0, dim1=-1, dim2=-2).sum(-1).squeeze()
             kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t).squeeze()
             kld = kld.sum()
+            with torch.no_grad():
+                lamb = self.iLQG.get_lamb()
+            kld = kld # * lamb
+            lamb = lamb + torch.clone(kld)
+            self.iLQG.update_lamb(lamb)
             # kl - divergence - between - two - multivariate - gaussians
             self.optimizer_P.zero_grad()
             kld.backward(retain_graph=True)
@@ -144,9 +149,7 @@ class GPS(BASE.BasePolicy):
                 param.grad.data.clamp_(-1, 1)
             self.optimizer_P.step()
             # update global policy
-            lamb = self.iLQG.get_lamb()
-            lamb = lamb + kld
-            self.iLQG.update_lamb(lamb)
+
             # update lambda
 
             i = i + 1
