@@ -7,7 +7,7 @@ from utils import buffer
 
 from utils import converter
 GAMMA = 0.98
-i_lqr_step = 10
+i_lqr_step = 5
 
 
 class GPS(BASE.BasePolicy):
@@ -92,6 +92,9 @@ class GPS(BASE.BasePolicy):
             predict_r = self.R_NAF.sa_reward(sa_in)
             rew_loss = self.criterion(t_r, predict_r)
 
+            print(predict_r.size())
+            print(t_r.size())
+
             self.optimizer_D.zero_grad()
             dyn_loss.backward(retain_graph=True)
             for param in self.Dynamics.parameters():
@@ -125,9 +128,11 @@ class GPS(BASE.BasePolicy):
             t_mean, t_var = self.P_NAF.prob(t_p_o)
             mean_d = (mean - t_mean).unsqueeze(-2)
             mean_d_t = torch.transpose(mean_d, -2, -1)
-            kld = kld + torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var))
-            kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
-            kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
+            kld = kld + torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var)).squeeze()
+            pre_trace = torch.matmul(torch.linalg.inv(t_var), var)
+            kld = kld + pre_trace.diagonal(offset=0, dim1=-1, dim2=-2).sum(-1).squeeze()
+            kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t).squeeze()
+            kld = kld.sum()
             # kl - divergence - between - two - multivariate - gaussians
             self.optimizer_P.zero_grad()
             kld.backward(retain_graph=True)

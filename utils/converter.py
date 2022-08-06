@@ -88,12 +88,12 @@ class NAFReward:
         pre_psd = torch.reshape(pre_psd, (-1, self.al, self.al)).squeeze()
         pre_psd_trans = torch.transpose(pre_psd, -2, -1)
         psd = torch.matmul(pre_psd, pre_psd_trans)
-
         a_b = (action - bias).unsqueeze(-2)
         a_b_t = torch.transpose(a_b, -2, -1)
-        last_val = torch.matmul(torch.matmul(a_b, psd), a_b_t) - value
 
-        return last_val.squeeze()
+        last_val = torch.matmul(torch.matmul(a_b, psd), a_b_t).squeeze() - value.squeeze()
+
+        return last_val
 
     def prob(self, state_action):
         state, action = torch.split(state_action, [self.sl, self.al], dim=-1)

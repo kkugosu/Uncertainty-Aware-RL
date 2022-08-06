@@ -41,9 +41,7 @@ class IterativeLQG:
 
     def get_local_action(self, state):
         state = state.unsqueeze(-2)
-        print("local state", state)
         act = torch.rand((1, self.al)).to(self.device)
-        print(act)
         mean, var = self.fit(state, act, 1)
         mean = mean.squeeze(-2)
         m = MultivariateNormal(mean, var)
@@ -63,10 +61,8 @@ class IterativeLQG:
         kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
         kld = kld.squeeze()
 
-        #print("kld = ", kld)
-
         reward = self.NAF_R.sa_reward(sa_in)
-        #print("reward = ", reward)
+
         return reward + kld
 
     def _forward(self):
@@ -101,24 +97,16 @@ class IterativeLQG:
         i = self.ts - 1
         while i > -1:
             j = 0
-            errcount = 0
             while j < self.b_s:
                 _C[j] = hessian(self.total_cost, sa_in[i][j])
-                #try:
-                #    torch.linalg.cholesky(_C[j])
-                #except:
-                #    errcount = errcount + 1
-                #    print("hessian error")
-                #    _C[j] = _C[j] + torch.eye(self.al + self.sl, device=self.device)*0.001
                 _c[j] = jacobian(self.total_cost, sa_in[i][j])
                 _F[j] = jacobian(self.dyn, sa_in[i][j])
                 j = j + 1
-            #print("errcount", errcount)
             _transF = torch.transpose(_F, -2, -1)
             _Q = _C + torch.matmul(torch.matmul(_transF, _V), _F)
 
             # eq 5[c~e]
-            _q = _c.unsqueeze(1) + torch.matmul(_v, _F)
+            _q = _c + torch.matmul(_v, _F)
 
             # eq 5[a~b]
 
@@ -175,14 +163,11 @@ class IterativeLQG:
         self.S[0] = state
         _C = None
         i = 0
-        while (self.if_conv != 1) and i < 10:
+        while (self.if_conv != 1) and i < 3:
             i = i + 1
             self._forward()
             _C = self._backward()
         self._forward()
-        print(self.A[0])
-        print("Ashape", self.A[0].size())
-        print(_C)
-        print("Cshape", _C.size())
+
         return self.A[0], _C
 

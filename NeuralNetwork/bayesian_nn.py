@@ -107,7 +107,7 @@ class BayesianModel(nn.Module):
         return result
 
     def kld_loss(self):
-        l1 = self.blinear1.kld_loss()
-        l2 = self.blinear2.kld_loss()
-        l3 = self.blinear3.kld_loss()
+        l1 = self.b_linear1.kld_loss()
+        l2 = self.b_linear2.kld_loss()
+        l3 = self.b_linear3.kld_loss()
         return l1 + l2 + l3
