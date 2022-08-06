@@ -47,12 +47,13 @@ class GPS(BASE.BasePolicy):
             i = i + 1
             self.Dynamics.set_freeze(1)
             self.buffer.renewal_memory(self.ca, self.data, self.dataloader)
-            print("full memory")
+            print("full memorymmmmmmmm")
             self.Dynamics.set_freeze(0)
             dyn_loss, rew_loss = self.train_dynamic_per_buff()
-            print("dynamic trained")
+            print("dynamic trainedmmmmmmmmmmmmm")
             self.Dynamics.set_freeze(1)
             policy_loss = self.train_policy_per_buff()
+            print("train overmmmmmmmmmmmmmmmmmmmm")
             self.writer.add_scalar("dyn/loss", dyn_loss, i)
             self.writer.add_scalar("rew/loss", rew_loss, i)
             self.writer.add_scalar("rew/loss", policy_loss, i)
@@ -60,7 +61,7 @@ class GPS(BASE.BasePolicy):
             torch.save(self.Dynamics.state_dict(), self.PARAM_PATH + "/d.pth")
             torch.save(self.Reward.state_dict(), self.PARAM_PATH + "/r.pth")
             torch.save(self.Policy_net.state_dict(), self.PARAM_PATH + "/p.pth")
-
+        """
         for param in self.Dynamics.parameters():
             print("----------dyn-------------")
             print(param)
@@ -70,6 +71,8 @@ class GPS(BASE.BasePolicy):
         for param in self.Policy_net.parameters():
             print("----------pol--------------")
             print(param)
+        """
+
         self.env.close()
         self.writer.flush()
         self.writer.close()
@@ -90,6 +93,7 @@ class GPS(BASE.BasePolicy):
             dyn_loss = self.criterion(t_o, predict_o) + self.Dynamics.kld_loss()
 
             predict_r = self.R_NAF.sa_reward(sa_in)
+            print(predict_r)
             rew_loss = self.criterion(t_r, predict_r)
 
             print(predict_r.size())
@@ -140,8 +144,9 @@ class GPS(BASE.BasePolicy):
                 param.grad.data.clamp_(-1, 1)
             self.optimizer_P.step()
             # update global policy
-
+            lamb = self.iLQG.get_lamb()
             lamb = lamb + kld
+            self.iLQG.update_lamb(lamb)
             # update lambda
 
             i = i + 1

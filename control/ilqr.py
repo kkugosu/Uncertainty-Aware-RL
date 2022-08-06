@@ -33,6 +33,7 @@ class IterativeLQG:
         self.R = torch.empty((self.ts, self.b_s, 1)).to(self.device)
         self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl).to(self.device)
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al).to(self.device)
+        self.lamb = 0.1
 
     def get_global_action(self, state):
         mean, var = self.NAF_P.prob(state)
@@ -63,7 +64,13 @@ class IterativeLQG:
 
         reward = self.NAF_R.sa_reward(sa_in)
 
-        return reward + kld
+        return reward + (self.lamb * kld)
+
+    def get_lamb(self):
+        return self.lamb
+
+    def update_lamb(self, lamb):
+        self.lamb = lamb
 
     def _forward(self):
 
@@ -107,7 +114,6 @@ class IterativeLQG:
 
             # eq 5[c~e]
             _q = _c + torch.matmul(_v, _F)
-
             # eq 5[a~b]
 
             _Q_pre1, _Q_pre2 = torch.split(_Q, [self.sl, self.al], dim=-2)
@@ -126,25 +132,18 @@ class IterativeLQG:
 
             _K = -torch.matmul(_invQuu, _Q_ux)
             _transK = torch.transpose(_K, -2, -1)
-            # K shape = [actlen, statelen]
 
             _k = -torch.matmul(_Q_u, _invQuu)
-            # k_t shape = [1,actlen]
-
             _V = (_Q_xx + torch.matmul(_Q_xu, _K) +
                   torch.matmul(_transK, _Q_ux) +
                   torch.matmul(torch.matmul(_transK, _Q_uu), _K)
                   )
             # eq 11c
-            # V_t shape = [statelen, statelen]
-
             _v = (_Q_x + torch.matmul(_k, _Q_ux) +
                   torch.matmul(_Q_u, _K) +
                   torch.matmul(_k, torch.matmul(_Q_uu, _K))
                   )
             # eq 11b
-            # v_t shape = [1, statelen]
-
             self.K_arr[i] = _K
             self.k_arr[i] = _k
             i = i - 1
