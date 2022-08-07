@@ -4,7 +4,8 @@ import numpy as np
 from torch import nn
 from NeuralNetwork import NN, bayesian_nn
 from utils import buffer
-
+from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions import kl
 from utils import converter
 GAMMA = 0.98
 i_lqr_step = 3
@@ -102,13 +103,13 @@ class GPS(BASE.BasePolicy):
             self.optimizer_D.zero_grad()
             dyn_loss.backward(retain_graph=True)
             for param in self.Dynamics.parameters():
-                param.grad.data.clamp_(-1, 1)
+                param.grad.data.clamp_(-0.1, 0.1)
             self.optimizer_D.step()
 
             self.optimizer_R.zero_grad()
             rew_loss.backward()
             for param in self.Reward.parameters():
-                param.grad.data.clamp_(-1, 1)
+                param.grad.data.clamp_(-0.1, 0.1)
             self.optimizer_R.step()
 
             i = i + 1
@@ -127,9 +128,9 @@ class GPS(BASE.BasePolicy):
             t_p_o = torch.tensor(n_p_o, dtype=torch.float32).to(self.device)
             t_a = torch.tensor(n_a, dtype=torch.float32).to(self.device)
             with torch.no_grad():
-                mean, var = self.iLQG.fit(t_p_o, t_a, self.b_s)
+                t_mean, t_var = self.iLQG.fit(t_p_o, t_a, self.b_s)
             # update local policy all we need is action(mean) and var
-            t_mean, t_var = self.P_NAF.prob(t_p_o)
+            mean, var = self.P_NAF.prob(t_p_o)
             mean_d = (mean - t_mean).unsqueeze(-2)
             mean_d_t = torch.transpose(mean_d, -2, -1)
             kld = kld + torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var)).squeeze()
@@ -146,7 +147,7 @@ class GPS(BASE.BasePolicy):
             self.optimizer_P.zero_grad()
             kld.backward(retain_graph=True)
             for param in self.Policy_net.parameters():
-                param.grad.data.clamp_(-1, 1)
+                param.grad.data.clamp_(-0.1, 0.1)
             self.optimizer_P.step()
             # update global policy
 

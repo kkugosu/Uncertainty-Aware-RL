@@ -1,9 +1,11 @@
 import torch
 from functorch import vmap, hessian, jacfwd
 from torch.distributions.multivariate_normal import MultivariateNormal
-from torch.autograd.functional import hessian, jacobian
+from torch.autograd.functional import jacobian #, hessian
 # based on https://homes.cs.washington.edu/~todorov/papers/TassaIROS12.pdf
+from torch.distributions import kl
 
+#kl.kl_divergence(p, q)
 
 class IterativeLQG:
 
@@ -51,16 +53,20 @@ class IterativeLQG:
     def total_cost(self, sa_in):
         state, action = torch.split(sa_in, [self.sl, self.al], dim=-1)
 
-        t_mean, t_var = self.NAF_P.prob(state)
-        mean, var = self.NAF_R.prob(sa_in)
-
+        mean, var = self.NAF_P.prob(state)
+        t_mean, t_var = self.NAF_R.prob(sa_in)
+        _input = MultivariateNormal(mean, var)
+        _target = MultivariateNormal(t_mean, t_var)
+        kld = kl.kl_divergence(_input, _target)
         #sampling no problem
+        """
         mean_d = (mean - t_mean).unsqueeze(0)
         mean_d_t = torch.transpose(mean_d, -2, -1)
         kld = torch.log(torch.linalg.det(t_var)) - torch.log(torch.linalg.det(var))
         kld = kld + torch.trace(torch.matmul(torch.linalg.inv(t_var), var))
         kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t)
         kld = kld.squeeze()
+        """
 
         reward = self.NAF_R.sa_reward(sa_in)
 
@@ -104,11 +110,19 @@ class IterativeLQG:
         i = self.ts - 1
         while i > -1:
             j = 0
+            print("loop start")
+            """
+            _C = vmap(hessian(self.total_cost))(sa_in[i])
+            _c = vmap(jacfwd(self.total_cost))(sa_in[i])
+            _F = vmap(jacfwd(self.dyn))(sa_in[i])
+            """
             while j < self.b_s:
                 _C[j] = hessian(self.total_cost, sa_in[i][j])
                 _c[j] = jacobian(self.total_cost, sa_in[i][j])
                 _F[j] = jacobian(self.dyn, sa_in[i][j])
                 j = j + 1
+
+            print("loopend so time consumming")
             _transF = torch.transpose(_F, -2, -1)
             _Q = _C + torch.matmul(torch.matmul(_transF, _V), _F)
 
