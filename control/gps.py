@@ -27,6 +27,7 @@ class GPS(BASE.BasePolicy):
         self.optimizer_R = torch.optim.SGD(self.Reward.parameters(), lr=self.lr)
         self.optimizer_P = torch.optim.SGD(self.Policy_net.parameters(), lr=self.lr)
         self.criterion = nn.MSELoss(reduction='mean')
+        self.lamb = 1
 
     def get_policy(self):
         return self.policy
@@ -38,7 +39,6 @@ class GPS(BASE.BasePolicy):
             self.Dynamics.load_state_dict(torch.load(self.PARAM_PATH + "/d.pth"))
             self.Reward.load_state_dict(torch.load(self.PARAM_PATH + "/r.pth"))
             self.Policy_net.load_state_dict(torch.load(self.PARAM_PATH + "/p.pth"))
-
             print("loading complete")
         else:
             pass
@@ -55,6 +55,8 @@ class GPS(BASE.BasePolicy):
             self.Dynamics.set_freeze(1)
             policy_loss = self.train_policy_per_buff()
             print("train overmmmmmmmmmmmmmmmmmmmm")
+            self.lamb = self.lamb + policy_loss
+            self.iLQG.update_lamb(self.lamb)
             self.writer.add_scalar("dyn/loss", dyn_loss, i)
             self.writer.add_scalar("rew/loss", rew_loss, i)
             self.writer.add_scalar("rew/loss", policy_loss, i)
@@ -120,7 +122,6 @@ class GPS(BASE.BasePolicy):
 
     def train_policy_per_buff(self):
         i = 0
-        lamb = 1
         kld = 0
         while i < self.m_i:
             # print(i)
@@ -138,11 +139,7 @@ class GPS(BASE.BasePolicy):
             kld = kld + pre_trace.diagonal(offset=0, dim1=-1, dim2=-2).sum(-1).squeeze()
             kld = kld + torch.matmul(torch.matmul(mean_d, torch.linalg.inv(t_var)), mean_d_t).squeeze()
             kld = kld.sum()
-            with torch.no_grad():
-                lamb = self.iLQG.get_lamb()
-            kld = kld # * lamb
-            lamb = lamb + torch.clone(kld)
-            self.iLQG.update_lamb(lamb)
+            kld = kld * self.lamb
             # kl - divergence - between - two - multivariate - gaussians
             self.optimizer_P.zero_grad()
             kld.backward(retain_graph=True)
@@ -150,7 +147,6 @@ class GPS(BASE.BasePolicy):
                 param.grad.data.clamp_(-0.1, 0.1)
             self.optimizer_P.step()
             # update global policy
-
             # update lambda
 
             i = i + 1

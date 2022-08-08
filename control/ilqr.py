@@ -5,7 +5,6 @@ from torch.autograd.functional import jacobian #, hessian
 # based on https://homes.cs.washington.edu/~todorov/papers/TassaIROS12.pdf
 from torch.distributions import kl
 
-#kl.kl_divergence(p, q)
 
 class IterativeLQG:
 
@@ -35,7 +34,6 @@ class IterativeLQG:
         self.R = torch.empty((self.ts, self.b_s, 1)).to(self.device)
         self.K_arr = torch.zeros(self.ts, self.b_s, self.al, self.sl).to(self.device)
         self.k_arr = torch.zeros(self.ts, self.b_s, 1, self.al).to(self.device)
-        self.lamb = 0.1
 
     def get_global_action(self, state):
         mean, var = self.NAF_P.prob(state)
@@ -58,7 +56,7 @@ class IterativeLQG:
         _input = MultivariateNormal(mean, var)
         _target = MultivariateNormal(t_mean, t_var)
         kld = kl.kl_divergence(_input, _target)
-        #sampling no problem
+
         """
         mean_d = (mean - t_mean).unsqueeze(0)
         mean_d_t = torch.transpose(mean_d, -2, -1)
@@ -71,9 +69,6 @@ class IterativeLQG:
         reward = self.NAF_R.sa_reward(sa_in)
 
         return reward + (self.lamb * kld)
-
-    def get_lamb(self):
-        return self.lamb
 
     def update_lamb(self, lamb):
         self.lamb = lamb
