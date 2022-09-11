@@ -64,5 +64,5 @@ https://jonathan-hui.medium.com/rl-guided-policy-search-gps-d1fae1084c24
 
 cs285
 
-“Learning Neural Network Policies with Guided Policy
+Learning Neural Network Policies with Guided Policy
 Search under Unknown Dynamics
