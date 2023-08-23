@@ -1,4 +1,4 @@
-## RL_MODELBASED
+## Uncertainty Aware RL
 
 guided policy search 
 
