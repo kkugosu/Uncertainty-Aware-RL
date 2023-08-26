@@ -12,25 +12,33 @@
 
 ## 🎓 Guided Policy Search 
 
-As suggested by the title, we guide the policy search based on iLQR optimization. We use a Bayesian Neural Network (BNN) as the dynamic model.
+as the title, we learn policy guided from ilqr optimization.
 
-**Overall Process of Algorithm:**
+we use bnn as dynamic model
 
-1. Randomly choose either \(\pi_{ilqr}\) or \(\pi_\theta\) and implement.
-2. Learn dynamics using the BNN.
-3. Learn \(\pi_{ilqr}\) and \(\pi_\theta\) using the BNN.
+overall process of algorithm is like this
 
-**Details of Process 3:** This follows the Dual Gradient Descent method. First, we set the cost as:
+$$ 1. \ randomly \ choose \ \pi_{ilqr} \ or \ \pi_\theta \ and \ implement. $$
 
-\[ \text{cost} = f + \lambda \times \text{(constraint)} \]
+$$ 2. \ learn \ dynamic \ by \ bnn $$
 
-This is in the Lagrangian form and we denote this cost as \( L(x^{*}(\lambda), \lambda) \). Here, \( x^{*}(\lambda) \) represents both the trajectory \( \tau \) and the network parameter \( \theta \). The update rule is:
+$$ 3. \ learn \ \pi_{ilqr} \ and \ \pi_\theta \ by \ using \ bnn $$
 
-1. \( \tau \leftarrow \text{argmin}_\tau L(\tau, \theta, \lambda) \)
-2. \( \theta \leftarrow \text{argmin}_\theta L(\tau, \theta, \lambda) \)
-3. \( \lambda \leftarrow \lambda + \alpha \times \frac{dg}{d\lambda} \)
+detail of process 3 is like below, dual gradient descent
 
----
+first we set cost = f + $\lambda (constraint)$ which is lagrangian form
+
+we name this cost as L($x^{*}(\lambda), \lambda$)
+
+$x^{*}(\lambda)$ means trajectory $\tau $ and network parameter $\theta $
+
+update rule is like this
+
+$$1. \ \tau \leftarrow argmin_\tau L(\tau, \theta, \lambda) $$
+
+$$2. \ \theta \leftarrow argmin_\theta L(\tau, \theta, \lambda) $$
+
+$$3. \ \lambda \leftarrow \lambda  + \alpha * {dg \over d\lambda } $$
 
 ## 🌍 Experiment Environments
 
